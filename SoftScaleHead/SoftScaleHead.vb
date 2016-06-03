@@ -5,6 +5,7 @@ Public Class SoftScaleHead
     Public FormIsClosing As Boolean = False
     Public ScaleIPAddress As String = ""
     Public ScalePort As String = "10001"
+    Public ScaleOnline As Boolean = True
     Public ZeroEnabled As Boolean = False
     Public ArgsFound As Boolean = False
     Public LastScaleReading As String = ""
@@ -33,11 +34,22 @@ Public Class SoftScaleHead
                 Me.Text = existingSection.Description
                 ScalePort = existingSection.Port
             End If
-            While Not FormIsClosing
-                ConnectScale(ScaleIPAddress, ScalePort)
-                Application.DoEvents()
-            End While
+            Application.DoEvents()
+            ReadFromScale()
         End If
+    End Sub
+
+    Private Sub ReadFromScale()
+        While Not FormIsClosing
+            If ScaleOnline Then
+                ConnectScale(ScaleIPAddress, ScalePort)
+            Else
+                If ConnectionTimer.Enabled = False Then
+                    ConnectionTimer.Start()
+                End If
+            End If
+            Application.DoEvents()
+        End While
     End Sub
 
     Private Sub SoftScaleHead_FormClosing(sender As Object, e As FormClosingEventArgs) Handles MyBase.FormClosing
@@ -115,18 +127,24 @@ Public Class SoftScaleHead
             MsgBox("ArgumentNullException: " & e.Message)
             Application.Exit()
             End
+        Catch e As IOException
+            If scaleClient IsNot Nothing Then
+                scaleClient.Close()
+            End If
+            ScaleWeight.Text = "*"
+            LastScaleReading = ""
+            ScaleOnline = False
         Catch e As SocketException
             ' Close everything.
-            scaleClient.Close()
+            If scaleClient IsNot Nothing Then
+                scaleClient.Close()
+            End If
             ScaleWeight.Text = "ERROR"
             LastScaleReading = ""
+            ScaleOnline = False
             'MsgBox("Could not connect to scale" & vbNewLine & "SocketException: " & e.Message)
             'Application.Exit()
             'End
-        Catch e As IOException
-            scaleClient.Close()
-            ScaleWeight.Text = "*"
-            LastScaleReading = ""
         End Try
     End Sub 'ConnectScale
 
@@ -346,6 +364,16 @@ Public Class SoftScaleHead
                 ConfigurationManager.RefreshSection("ScaleSettings")
             Catch
             End Try
+        End If
+    End Sub
+
+    Private Sub ConnectionTimer_Tick(sender As Object, e As EventArgs) Handles ConnectionTimer.Tick
+        Try
+            ScaleOnline = My.Computer.Network.Ping(ScaleIPAddress, 1000)
+        Catch
+        End Try
+        If ScaleOnline Then
+            ConnectionTimer.Stop()
         End If
     End Sub
 End Class

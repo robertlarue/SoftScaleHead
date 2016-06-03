@@ -31,6 +31,7 @@ Partial Class SoftScaleHead
         Me.ZeroControls = New System.Windows.Forms.GroupBox()
         Me.ContextMenuStrip1 = New System.Windows.Forms.ContextMenuStrip(Me.components)
         Me.RememberLocation = New System.Windows.Forms.ToolStripMenuItem()
+        Me.ConnectionTimer = New System.Windows.Forms.Timer(Me.components)
         Me.ScaleWeight = New DisabledRichTextBox()
         Me.Movement.SuspendLayout()
         Me.ZeroControls.SuspendLayout()
@@ -113,6 +114,10 @@ Partial Class SoftScaleHead
         Me.RememberLocation.Size = New System.Drawing.Size(218, 26)
         Me.RememberLocation.Text = "Remember Location"
         '
+        'ConnectionTimer
+        '
+        Me.ConnectionTimer.Interval = 5000
+        '
         'ScaleWeight
         '
         Me.ScaleWeight.Anchor = CType((((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
@@ -137,7 +142,7 @@ Partial Class SoftScaleHead
         Me.ScaleWeight.Text = "ERROR"
         Me.ScaleWeight.WordWrap = False
         '
-        'Form1
+        'SoftScaleHead
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(8.0!, 16.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
@@ -150,7 +155,7 @@ Partial Class SoftScaleHead
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MaximizeBox = False
         Me.MinimumSize = New System.Drawing.Size(220, 80)
-        Me.Name = "Form1"
+        Me.Name = "SoftScaleHead"
         Me.Text = "SoftScaleHead"
         Me.Movement.ResumeLayout(False)
         Me.ZeroControls.ResumeLayout(False)
@@ -167,4 +172,5 @@ Partial Class SoftScaleHead
     Friend WithEvents MotionLight As Button
     Friend WithEvents ContextMenuStrip1 As ContextMenuStrip
     Friend WithEvents RememberLocation As ToolStripMenuItem
+    Friend WithEvents ConnectionTimer As Timer
 End Class
