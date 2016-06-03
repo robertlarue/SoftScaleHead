@@ -45,14 +45,15 @@ Public Class SoftScaleHead
 
     End Sub
     Sub ConnectScale(IPscale As [String], portNumScale As [String])
+        ' Create a TcpClient.
+        ' Note, for this client to work you need to have a TcpServer 
+        ' connected to the same address as specified by the server, port
+        ' combination.
+        Dim portScale As Int32 = Convert.ToInt32(portNumScale)
+        Dim scaleClient As TcpClient = Nothing
         Try
-            ' Create a TcpClient.
-            ' Note, for this client to work you need to have a TcpServer 
-            ' connected to the same address as specified by the server, port
-            ' combination.
-            Dim portScale As Int32 = Convert.ToInt32(portNumScale)
-            Dim scaleClient As New TcpClient(IPscale, portScale)
-
+            scaleClient = New TcpClient(IPscale, portScale)
+            scaleClient.ReceiveTimeout = 1000
             ' Get a client stream for reading and writing.
             Dim scaleStream As NetworkStream = scaleClient.GetStream()
             Dim scaleReader As StreamReader = New StreamReader(scaleStream)
@@ -115,10 +116,17 @@ Public Class SoftScaleHead
             Application.Exit()
             End
         Catch e As SocketException
+            ' Close everything.
+            scaleClient.Close()
             ScaleWeight.Text = "ERROR"
+            LastScaleReading = ""
             'MsgBox("Could not connect to scale" & vbNewLine & "SocketException: " & e.Message)
             'Application.Exit()
             'End
+        Catch e As IOException
+            scaleClient.Close()
+            ScaleWeight.Text = "*"
+            LastScaleReading = ""
         End Try
     End Sub 'ConnectScale
 
