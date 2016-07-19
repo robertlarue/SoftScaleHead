@@ -6,7 +6,11 @@ Public Class SoftScaleHead
     Public ScaleIPAddress As String = ""
     Public ScalePort As String = "10001"
     Public ScaleOnline As Boolean = True
+    Public ScaleClient As TcpClient = Nothing
+    Public ScaleStream As NetworkStream = Nothing
+    Public ScaleStreamReader As StreamReader = Nothing
     Public ZeroEnabled As Boolean = False
+    Public ZeroCommandFile As String = My.Application.Info.DirectoryPath & "\" & "RiceLakeZero.txt"
     Public ArgsFound As Boolean = False
     Public LastScaleReading As String = ""
     'Public ArgsFound As Boolean = False
@@ -20,20 +24,37 @@ Public Class SoftScaleHead
                 newConfigSection.Location = Me.Location
                 newConfigSection.Size = Me.Size
                 newConfigSection.ZeroEnabled = ZeroEnabled
+                newConfigSection.ZeroCommandFile = ZeroCommandFile
                 newConfigSection.Description = Me.Text
                 newConfigSection.Port = ScalePort
+                newConfigSection.BackGroundColor = Color.Black
+                newConfigSection.TextColor = Color.Chartreuse
                 config.Sections.Add("_" & ScaleIPAddress & ScalePort, newConfigSection)
                 config.Save(ConfigurationSaveMode.Modified)
                 ConfigurationManager.RefreshSection("ScaleSettings")
-
             Else
                 ScaleIPAddress = existingSection.IPAddress
                 Me.Location = existingSection.Location
                 Me.Size = existingSection.Size
                 ZeroEnabled = existingSection.ZeroEnabled
+                EnableZeroingToolStripMenuItem.Checked = ZeroEnabled
+                ZeroButton.Visible = ZeroEnabled
+                ZeroCommandFile = existingSection.ZeroCommandFile
+                CommandFileNameToolStripMenuItem.Text = Path.GetFileName(existingSection.ZeroCommandFile)
                 Me.Text = existingSection.Description
                 ScalePort = existingSection.Port
+                Panel1.BackColor = existingSection.BackGroundColor
+                ScaleWeight.BackColor = existingSection.BackGroundColor
+                Dim ControlColor As Color
+                If existingSection.BackGroundColor.GetBrightness < 0.1 Then
+                    ControlColor = Lighten(existingSection.BackGroundColor, 0.1)
+                Else
+                    ControlColor = Darken(existingSection.BackGroundColor, 0.1)
+                End If
+                Me.BackColor = ControlColor
+                ScaleWeight.ForeColor = existingSection.TextColor
             End If
+
             Application.DoEvents()
             ReadFromScale()
         End If
@@ -42,7 +63,11 @@ Public Class SoftScaleHead
     Private Sub ReadFromScale()
         While Not FormIsClosing
             If ScaleOnline Then
-                ConnectScale(ScaleIPAddress, ScalePort)
+                If ScaleStreamReader Is Nothing Then
+                    ConnectScale(ScaleIPAddress, ScalePort)
+                Else
+                    ReadScaleStream()
+                End If
             Else
                 If ConnectionTimer.Enabled = False Then
                     ConnectionTimer.Start()
@@ -56,33 +81,24 @@ Public Class SoftScaleHead
         FormIsClosing = True
 
     End Sub
-    Sub ConnectScale(IPscale As [String], portNumScale As [String])
-        ' Create a TcpClient.
-        ' Note, for this client to work you need to have a TcpServer 
-        ' connected to the same address as specified by the server, port
-        ' combination.
-        Dim portScale As Int32 = Convert.ToInt32(portNumScale)
-        Dim scaleClient As TcpClient = Nothing
+    Private Sub ReadScaleStream()
         Try
-            scaleClient = New TcpClient(IPscale, portScale)
-            scaleClient.ReceiveTimeout = 1000
             ' Get a client stream for reading and writing.
-            Dim scaleStream As NetworkStream = scaleClient.GetStream()
-            Dim scaleReader As StreamReader = New StreamReader(scaleStream)
+
 
             ' Receive the TcpServer.response.
             ' Buffer to store the response bytes.
             ' Read the first batch of the TcpServer response bytes.
-            Dim scaleChar As Char = Nothing
+            Dim scaleChar As Char = ""
             Do
-                scaleChar = Convert.ToChar(scaleReader.Read())
+                scaleChar = Convert.ToChar(ScaleStreamReader.Read())
                 If scaleChar = vbCr Then
                     Exit Do
                 End If
             Loop
-            Dim scaleLine As String = Nothing
+            Dim scaleLine As String = ""
             Do
-                scaleChar = Convert.ToChar(scaleReader.Read())
+                scaleChar = Convert.ToChar(ScaleStreamReader.Read())
                 If scaleChar = vbCr Then
                     Exit Do
                 Else
@@ -107,6 +123,7 @@ Public Class SoftScaleHead
 
             scaleLine = scaleLine.Replace("L", "")
             scaleLine = scaleLine.Replace("B", "")
+            scaleLine = scaleLine.Replace("K", "")
             scaleLine = scaleLine.Replace("G", "")
             scaleLine = scaleLine.Replace("Z", "")
             scaleLine = scaleLine.Replace("M", "")
@@ -116,84 +133,157 @@ Public Class SoftScaleHead
                 scaleLine = LastScaleReading
             End If
             If scaleLine.Length > 2 And scaleLine <> LastScaleReading Then
+                HideErrorDropdown()
                 ScaleWeight.Text = scaleLine
                 Debug.WriteLine(scaleLine)
                 LastScaleReading = scaleLine
             End If
-            ' Close everything.
-            scaleStream.Close()
-            scaleClient.Close()
         Catch e As ArgumentNullException
-            MsgBox("ArgumentNullException: " & e.Message)
+            Debug.WriteLine("ReadScaleStream ArgumentNullException: " & e.Message)
             Application.Exit()
             End
         Catch e As IOException
-            If scaleClient IsNot Nothing Then
-                scaleClient.Close()
+            Try
+                Debug.WriteLine("Pinging " & ScaleIPAddress)
+                ScaleOnline = My.Computer.Network.Ping(ScaleIPAddress, 1000)
+            Catch
+                ScaleOnline = False
+            End Try
+            If ScaleOnline Then
+                ScaleWeight.Text = "SERIAL"
+                ShowErrorDropdown("No serial data received. Check connection.")
+            Else
+                ScaleWeight.Text = "DISCONN"
+                ShowErrorDropdown("Network disconnected. Check connection.")
+                ScaleStream.Close()
+                ScaleStream = Nothing
+                ScaleClient.Close()
+                ScaleClient = Nothing
+                ScaleStreamReader = Nothing
             End If
-            ScaleWeight.Text = "*"
             LastScaleReading = ""
-            ScaleOnline = False
+            Debug.WriteLine("ReadScaleStream IOException: " & e.Message)
         Catch e As SocketException
-            ' Close everything.
-            If scaleClient IsNot Nothing Then
-                scaleClient.Close()
-            End If
             ScaleWeight.Text = "ERROR"
             LastScaleReading = ""
             ScaleOnline = False
-            'MsgBox("Could not connect to scale" & vbNewLine & "SocketException: " & e.Message)
-            'Application.Exit()
-            'End
+            ScaleStream.Close()
+            ScaleStream = Nothing
+            ScaleClient.Close()
+            ScaleClient = Nothing
+            ScaleStreamReader = Nothing
+            Debug.WriteLine("ReadScaleStream SocketException: " & e.Message)
+        Catch e As NullReferenceException
+            Debug.WriteLine("ReadScaleStream NullReferenceException: " & e.Message)
+        End Try
+    End Sub
+    Sub ConnectScale(IPscale As [String], portNumScale As [String])
+        ' Create a TcpClient.
+        ' Note, for this client to work you need to have a TcpServer 
+        ' connected to the same address as specified by the server, port
+        ' combination.
+        Dim portScale As Int32 = Convert.ToInt32(portNumScale)
+        Try
+            ScaleClient = New TcpClient()
+            ScaleClient.ReceiveTimeout = 100
+            ScaleClient.SendTimeout = 100
+            Dim connectResult = ScaleClient.BeginConnect(Net.IPAddress.Parse(IPscale), portScale, Nothing, Nothing)
+            Dim connectSuccess = connectResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1))
+            If Not connectSuccess Then
+                Throw New SocketException()
+            End If
+            ScaleClient.EndConnect(connectResult)
+            ScaleStream = ScaleClient.GetStream()
+            ScaleStreamReader = New StreamReader(ScaleStream)
+        Catch e As ArgumentNullException
+            Debug.WriteLine("ConnectScale ArgumentNullException: " & e.Message)
+            Application.Exit()
+            End
+        Catch e As IOException
+            ScaleWeight.Text = "ERROR"
+            LastScaleReading = ""
+            ScaleOnline = False
+            If ScaleStream IsNot Nothing Then
+                ScaleStream.Close()
+            End If
+            ScaleStream = Nothing
+            If ScaleClient IsNot Nothing Then
+                ScaleClient.Close()
+            End If
+            ScaleClient = Nothing
+            ScaleStreamReader = Nothing
+            Debug.WriteLine("ConnectScale IOException: " & e.Message)
+        Catch e As SocketException
+            ' Close everything.
+            If ScaleClient IsNot Nothing Then
+                ScaleClient.Close()
+            End If
+            ScaleWeight.Text = "DISCON"
+            ShowErrorDropdown("Network disconnected. Check connection.")
+            LastScaleReading = ""
+            ScaleOnline = False
+            If ScaleStream IsNot Nothing Then
+                ScaleStream.Close()
+            End If
+            ScaleStream = Nothing
+            If ScaleClient IsNot Nothing Then
+                ScaleClient.Close()
+            End If
+            ScaleClient = Nothing
+            ScaleStreamReader = Nothing
+            Debug.WriteLine("ConnectScale SocketException: " & e.Message)
+        Catch e As NullReferenceException
+            Debug.WriteLine("ConnectScale NullReferenceException: " & e.Message)
         End Try
     End Sub 'ConnectScale
 
-    Sub ZeroScale(server As [String], portNum As [String], messageFile As [String])
+    Sub ZeroScale(messageFile As [String])
         Try
-            ' Create a TcpClient.
-            ' Note, for this client to work you need to have a TcpServer 
-            ' connected to the same address as specified by the server, port
-            ' combination.
-            Dim port As Int32 = Convert.ToInt32(portNum)
-            Dim client As New TcpClient(server, port)
-
-            ' Get a client stream for reading and writing.
-            '  Stream stream = client.GetStream();
-            Dim stream As NetworkStream = client.GetStream()
             Dim TextLine As String
             TextLine = ""
+            If File.Exists(messageFile) Then
+                Dim messages() As String = File.ReadAllLines(messageFile)
+                For Each message In messages
+                    Dim data As [Byte]()
+                    If message = "^R" Then
+                        data = {18}
+                    Else
+                        data = System.Text.Encoding.ASCII.GetBytes(message + vbCrLf)
+                    End If
+                    ScaleStream.Write(data, 0, data.Length)
+                Next
+            End If
 
-            Dim messages() As String = File.ReadAllLines(messageFile)
-            For Each message In messages
-                Dim data As [Byte]() = System.Text.Encoding.ASCII.GetBytes(message + vbCrLf)
-                stream.Write(data, 0, data.Length)
-            Next
-
-            ' Close everything.
-            stream.Close()
-            client.Close()
         Catch e As ArgumentNullException
-            Console.WriteLine("ArgumentNullException: {0}", e)
+            Debug.WriteLine("ZeroScale ArgumentNullException: {0}", e)
         Catch e As SocketException
-            Console.WriteLine("SocketException: {0}", e)
+            Debug.WriteLine("ZeroScale SocketException: {0}", e)
+        Catch e As NullReferenceException
+            Debug.WriteLine("ZeroScale NullReferenceException: {0}", e)
         End Try
     End Sub 'ZeroScale
 
     Private Sub SoftScaleHead_Resize(sender As Object, e As EventArgs) Handles MyBase.Resize
-        Dim newHeight As Integer = 10
-        If ScaleWeight.Height > 10 Then
-            newHeight = ScaleWeight.Height
-        End If
-        Dim scaleFont As Font = New Font("Lucida Console", Convert.ToSingle(newHeight * 0.95), GraphicsUnit.Pixel)
-        ScaleWeight.Font = scaleFont
-        If Not Me.WindowState = FormWindowState.Minimized Then
+        If (Not Me.WindowState = FormWindowState.Minimized) Then
+            Dim newHeight As Integer = 10
+            If ScaleWeight.Height > 10 Then
+                newHeight = ScaleWeight.Height
+            End If
+            Dim minWidth = (0.00004 * (Me.Size.Height - 20) ^ 2) + ((Me.Size.Height - 20) * 4.3) - 9.5376
+            Dim newMinSize As Size = New Size(minWidth, Me.MinimumSize.Height)
+            Dim newSize As Size = New Size(minWidth, Me.Size.Height)
+            Me.MinimumSize = newMinSize
+            Me.Size = newSize
+            Dim scaleFont As Font = New Font("Lucida Console", Convert.ToSingle(newHeight), GraphicsUnit.Pixel)
+            ScaleWeight.Font = scaleFont
             Try
                 Dim config As Configuration = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None)
                 Dim section As ScaleSettings = config.GetSection("_" & ScaleIPAddress & ScalePort)
                 section.Size = Me.Size
                 config.Save(ConfigurationSaveMode.Modified)
                 ConfigurationManager.RefreshSection("ScaleSettings")
-            Catch
+            Catch ex As Exception
+                Debug.WriteLine("Resize Exception: " & ex.Message)
             End Try
         End If
     End Sub
@@ -225,8 +315,14 @@ Public Class SoftScaleHead
                             End
                         End If
                     ElseIf switch = "/z"
+                        Dim ZeroCommandArg As String = My.Application.Info.DirectoryPath & "\" & args(argnum + 1)
                         ZeroButton.Visible = True
+                        EnableZeroingToolStripMenuItem.Checked = True
                         ZeroEnabled = True
+                        If File.Exists(ZeroCommandArg) Then
+                            ZeroCommandFile = ZeroCommandArg
+                            CommandFileNameToolStripMenuItem.Text = Path.GetFileName(ZeroCommandArg)
+                        End If
                     ElseIf switch = "/x"
                         Dim CurrentLocation As Point = Me.Location
                         Try
@@ -280,15 +376,17 @@ Public Class SoftScaleHead
                 Next
             Else
                 DisplayHelpMessage()
-                'Application.Exit()
-                'End
+                Application.Exit()
+                End
             End If
+
         Catch ex As Exception
-            MsgBox(ex.Message)
+            Debug.WriteLine("Load Exception: " & ex.Message)
             Application.Exit()
             End
         End Try
     End Sub
+
     Public Function CheckPort(port As String) As Boolean
         Dim portInt As Integer = 0
         If Integer.TryParse(port, portInt) Then
@@ -320,22 +418,41 @@ Public Class SoftScaleHead
     vbTab & "on a scale. It also can zero a scale if the RX" & vbNewLine &
     vbTab & "pin of the scale is connected" & vbNewLine &
     "USAGE:  " & vbNewLine &
-    vbTab & "SoftScaleHead /a <IP Address> [/p <Port>] [/z]" & vbNewLine &
+    vbTab & "SoftScaleHead /a <IP Address> [/p <Port>] [/z <zerocommands.txt>]" & vbNewLine &
     vbTab & "/a    IP Address of Scale Moxa" & vbNewLine &
     vbTab & "/p    [Optional] Port number" & vbNewLine &
-    vbTab & "/z    [Optional] Enable Zeroing" & vbNewLine &
+    vbTab & "/z    [Optional] Enable Zeroing Command" & vbNewLine &
+    vbTab & "/d    [Optional] Scale Description" & vbNewLine &
     vbNewLine &
     vbTab & "Must include IP address" & vbNewLine &
     vbTab & "Port is 10001 unless otherwise specified" & vbNewLine &
     vbNewLine & "EXAMPLE:   " & vbNewLine &
-    vbTab & "SoftScaleHead /a 172.16.4.201 /p 10001 /z" & vbNewLine &
-    vbTab & "Connect to Scale with IP of 172.16.4.201" & vbNewLine &
+    vbTab & "SoftScaleHead /a 172.16.4.201 /p 10001 /z RiceLakeZero.txt /d ""LANE 1""" & vbNewLine &
+    vbTab & "Connect to Rice Lake Scale LANE 1 with IP of 172.16.4.201" & vbNewLine &
     vbTab & "Use port 10001" & vbNewLine &
     vbTab & "Enable zeroing of the scale"
         MsgBox(HelpMessage, MsgBoxStyle.Information, "Invalid Command Line Arguments")
     End Sub
     Private Sub ZeroButton_Click(sender As Object, e As EventArgs) Handles ZeroButton.Click
-        ZeroScale(ScaleIPAddress, ScalePort, My.Application.Info.DirectoryPath + "\zerocommands.txt")
+        If Not ZeroButtonTimeout.Enabled Then
+            ZeroButtonTimeout.Start()
+            ZeroScale(ZeroCommandFile)
+            'If ScaleStream IsNot Nothing Then
+            '    ZeroScale(ZeroCommandFile)
+            'Else
+            '    ConnectionTimer.Stop()
+            '    Try
+            '        ScaleOnline = My.Computer.Network.Ping(ScaleIPAddress, 1000)
+            '    Catch
+            '        ScaleOnline = False
+            '    End Try
+            '    If ScaleOnline Then
+            '        ZeroScale(ZeroCommandFile)
+            '    Else
+            '        ConnectionTimer.Start()
+            '    End If
+            'End If
+        End If
     End Sub
 
     Private Sub SoftScaleHead_MouseEnter(sender As Object, e As EventArgs) Handles MyBase.MouseEnter
@@ -355,7 +472,7 @@ Public Class SoftScaleHead
     End Sub
 
     Private Sub SoftScaleHead_LocationChanged(sender As Object, e As EventArgs) Handles MyBase.LocationChanged
-        If Not Me.WindowState = FormWindowState.Minimized Then
+        If (Not Me.WindowState = FormWindowState.Minimized) Then
             Try
                 Dim config As Configuration = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None)
                 Dim section As ScaleSettings = config.GetSection("_" & ScaleIPAddress & ScalePort)
@@ -369,12 +486,195 @@ Public Class SoftScaleHead
 
     Private Sub ConnectionTimer_Tick(sender As Object, e As EventArgs) Handles ConnectionTimer.Tick
         Try
+            Debug.WriteLine("Pinging " & ScaleIPAddress)
             ScaleOnline = My.Computer.Network.Ping(ScaleIPAddress, 1000)
-        Catch
+        Catch ex As Exception
+            Debug.WriteLine("ConnectionTimer Exception: " & ex.Message)
         End Try
         If ScaleOnline Then
             ConnectionTimer.Stop()
         End If
+    End Sub
+
+    'Private Sub GreenColorMenu_Click(sender As Object, e As EventArgs)
+    '    ScaleWeight.ForeColor = Color.Chartreuse
+    '    ScaleWeight.BackColor = Color.Black
+    '    Panel1.BackColor = Color.Black
+    '    UncheckOtherColors(GreenColorMenu)
+    '    SaveColorSettings()
+    'End Sub
+
+    'Private Sub RedColorMenu_Click(sender As Object, e As EventArgs)
+    '    ScaleWeight.ForeColor = Color.Red
+    '    ScaleWeight.BackColor = Color.Black
+    '    Panel1.BackColor = Color.Black
+    '    UncheckOtherColors(RedColorMenu)
+    '    SaveColorSettings()
+    'End Sub
+
+    'Private Sub TealColorMenu_Click(sender As Object, e As EventArgs)
+    '    ScaleWeight.ForeColor = Color.Cyan
+    '    ScaleWeight.BackColor = Color.Black
+    '    Panel1.BackColor = Color.Black
+    '    UncheckOtherColors(TealColorMenu)
+    '    SaveColorSettings()
+    'End Sub
+    'Private Sub WhiteBlackToolStripMenuItem_Click(sender As Object, e As EventArgs)
+    '    ScaleWeight.ForeColor = Color.White
+    '    ScaleWeight.BackColor = Color.Black
+    '    Panel1.BackColor = Color.Black
+    '    UncheckOtherColors(WhiteBlackToolStripMenuItem)
+    '    SaveColorSettings()
+    'End Sub
+    'Private Sub BlackWhiteToolStripMenuItem_Click(sender As Object, e As EventArgs)
+    '    ScaleWeight.ForeColor = Color.Black
+    '    ScaleWeight.BackColor = SystemColors.Menu
+    '    Panel1.BackColor = SystemColors.Menu
+    '    UncheckOtherColors(BlackWhiteToolStripMenuItem)
+    '    SaveColorSettings()
+    'End Sub
+
+    'Private Sub RedWhiteToolStripMenuItem_Click(sender As Object, e As EventArgs)
+    '    ScaleWeight.ForeColor = Color.Red
+    '    ScaleWeight.BackColor = SystemColors.Menu
+    '    Panel1.BackColor = SystemColors.Menu
+    '    UncheckOtherColors(RedWhiteToolStripMenuItem)
+    '    SaveColorSettings()
+    'End Sub
+
+    'Private Sub BlueWhiteToolStripMenuItem_Click(sender As Object, e As EventArgs)
+    '    ScaleWeight.ForeColor = Color.Blue
+    '    ScaleWeight.BackColor = SystemColors.Menu
+    '    Panel1.BackColor = SystemColors.Menu
+    '    UncheckOtherColors(BlueWhiteToolStripMenuItem)
+    '    SaveColorSettings()
+    'End Sub
+
+    Private Sub UncheckOtherColors(MenuItem As ToolStripMenuItem)
+        If MenuItem.Checked Then
+            For Each Item As ToolStripMenuItem In ColorMenu.DropDownItems
+                If Item IsNot MenuItem Then
+                    Item.Checked = False
+                End If
+            Next
+        End If
+    End Sub
+    Private Sub SaveColorSettings()
+        Dim config As Configuration = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None)
+        Dim section As ScaleSettings = config.GetSection("_" & ScaleIPAddress & ScalePort)
+        section.BackGroundColor = ScaleWeight.BackColor
+        section.TextColor = ScaleWeight.ForeColor
+        config.Save(ConfigurationSaveMode.Modified)
+        ConfigurationManager.RefreshSection("ScaleSettings")
+    End Sub
+
+    Private Sub SaveZeroSettings()
+        Dim config As Configuration = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None)
+        Dim section As ScaleSettings = config.GetSection("_" & ScaleIPAddress & ScalePort)
+        section.ZeroEnabled = ZeroEnabled
+        section.ZeroCommandFile = ZeroCommandFile
+        config.Save(ConfigurationSaveMode.Modified)
+        ConfigurationManager.RefreshSection("ScaleSettings")
+    End Sub
+
+    Private Sub SaveDescriptionSettings()
+        Dim config As Configuration = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None)
+        Dim section As ScaleSettings = config.GetSection("_" & ScaleIPAddress & ScalePort)
+        section.Description = Me.Text
+        config.Save(ConfigurationSaveMode.Modified)
+        ConfigurationManager.RefreshSection("ScaleSettings")
+    End Sub
+
+    Private Sub ColorMenu_Click(sender As Object, e As EventArgs) Handles ColorMenu.Click
+        Dim bgColorDialog As ColorDialog = New ColorDialog()
+        bgColorDialog.Color = ScaleWeight.BackColor
+        If (bgColorDialog.ShowDialog() = DialogResult.OK) Then
+            If bgColorDialog.Color = ScaleWeight.ForeColor Then
+                MsgBox("Text color must be different than background color. Please choose another color.")
+            Else
+                ScaleWeight.BackColor = bgColorDialog.Color
+                Panel1.BackColor = bgColorDialog.Color
+                Dim ControlColor As Color
+                If bgColorDialog.Color.GetBrightness < 0.1 Then
+                    ControlColor = Lighten(bgColorDialog.Color, 0.1)
+                Else
+                    ControlColor = Darken(bgColorDialog.Color, 0.1)
+                End If
+                Me.BackColor = ControlColor
+                SaveColorSettings()
+            End If
+        End If
+    End Sub
+
+    Public Shared Function Lighten(inColor As Color, inAmount As Double) As Color
+        Return Color.FromArgb(inColor.A, CInt(Math.Min(255, inColor.R + 255 * inAmount)), CInt(Math.Min(255, inColor.G + 255 * inAmount)), CInt(Math.Min(255, inColor.B + 255 * inAmount)))
+    End Function
+
+    Public Shared Function Darken(inColor As Color, inAmount As Double) As Color
+        Return Color.FromArgb(inColor.A, CInt(Math.Max(0, inColor.R - 255 * inAmount)), CInt(Math.Max(0, inColor.G - 255 * inAmount)), CInt(Math.Max(0, inColor.B - 255 * inAmount)))
+    End Function
+
+    Private Sub TextColorToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles TextColorToolStripMenuItem.Click
+        Dim textColorDialog As ColorDialog = New ColorDialog()
+        textColorDialog.Color = ScaleWeight.BackColor
+        If (textColorDialog.ShowDialog() = DialogResult.OK) Then
+            If textColorDialog.Color = ScaleWeight.BackColor Then
+                MsgBox("Text color must be different than background color. Please choose another color.")
+            Else
+                ScaleWeight.ForeColor = textColorDialog.Color
+                SaveColorSettings()
+            End If
+        End If
+    End Sub
+
+    Private Sub EnableZeroingToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles EnableZeroingToolStripMenuItem.Click
+        ZeroEnabled = EnableZeroingToolStripMenuItem.Checked
+        ZeroButton.Enabled = ZeroEnabled
+        ZeroButton.Visible = ZeroEnabled
+        SaveZeroSettings()
+    End Sub
+
+    Private Sub RenameToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles RenameToolStripMenuItem.Click
+        Dim NewScaleName As String = InputBox("Enter New Scale Name", "Rename Scale", "", Me.Location.X, Me.Location.Y)
+        If NewScaleName <> "" Then
+            Me.Text = NewScaleName
+            SaveDescriptionSettings()
+        End If
+    End Sub
+
+    Private Sub OpenCommandFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles OpenCommandFileToolStripMenuItem.Click
+        Dim ZeroCommandFileDialog As New OpenFileDialog()
+        ZeroCommandFileDialog.InitialDirectory = My.Application.Info.DirectoryPath
+        ZeroCommandFileDialog.CheckFileExists = True
+        If ZeroCommandFileDialog.ShowDialog() = DialogResult.OK Then
+            ZeroCommandFile = ZeroCommandFileDialog.FileName
+            CommandFileNameToolStripMenuItem.Text = Path.GetFileName(ZeroCommandFileDialog.FileName)
+            SaveZeroSettings()
+        End If
+    End Sub
+
+    Private Sub ZeroButtonTimeout_Tick(sender As Object, e As EventArgs) Handles ZeroButtonTimeout.Tick
+        ZeroButtonTimeout.Stop()
+    End Sub
+
+    Private Sub ShowErrorDropdown(msg As String)
+        ErrorMessage.Visible = True
+        ErrorMessage.Text = " " & msg
+        If msg.ToLower().Contains("serial") Then
+            ErrorImage.Visible = True
+            ErrorImage.BringToFront()
+            ErrorImage.Image = My.Resources.SerialError
+        ElseIf msg.ToLower().Contains("network")
+            ErrorImage.Visible = True
+            ErrorImage.BringToFront()
+            ErrorImage.Image = My.Resources.NetworkError
+        End If
+    End Sub
+
+    Private Sub HideErrorDropdown()
+        ErrorMessage.Visible = False
+        ErrorImage.Visible = False
+        ErrorImage.BringToFront()
     End Sub
 End Class
 Public Class DisabledRichTextBox
@@ -441,6 +741,15 @@ Public Class ScaleSettings
             Me("ZeroEnabled") = value
         End Set
     End Property
+    <ConfigurationProperty("ZeroCommandFile", DefaultValue:="", IsRequired:=False)>
+    Public Property ZeroCommandFile() As String
+        Get
+            Return CType(Me("ZeroCommandFile"), String)
+        End Get
+        Set(ByVal value As String)
+            Me("ZeroCommandFile") = value
+        End Set
+    End Property
     <ConfigurationProperty("Description", DefaultValue:="", IsRequired:=False)>
     Public Property Description() As String
         Get
@@ -448,6 +757,24 @@ Public Class ScaleSettings
         End Get
         Set(ByVal value As String)
             Me("Description") = value
+        End Set
+    End Property
+    <ConfigurationProperty("BackGroundColor", DefaultValue:="Black", IsRequired:=False)>
+    Public Property BackGroundColor() As Color
+        Get
+            Return CType(Me("BackGroundColor"), Color)
+        End Get
+        Set(ByVal value As Color)
+            Me("BackGroundColor") = value
+        End Set
+    End Property
+    <ConfigurationProperty("TextColor", DefaultValue:="Chartreuse", IsRequired:=False)>
+    Public Property TextColor() As Color
+        Get
+            Return CType(Me("TextColor"), Color)
+        End Get
+        Set(ByVal value As Color)
+            Me("TextColor") = value
         End Set
     End Property
 End Class

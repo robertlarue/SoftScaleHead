@@ -126,8 +126,17 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Resources\Open_6529.png" />
+    <None Include="Resources\ViewCode%28Markup%29_6279.png" />
+    <None Include="Resources\pane_appearance_16x16_on.png" />
+    <None Include="Resources\FontColor_11146.png" />
+    <None Include="Resources\Rename_6779.png" />
+    <None Include="Resources\ExpanderElement_10708.png" />
+    <None Include="Resources\SerialError.png" />
+    <None Include="Resources\NetworkError.png" />
+    <Content Include="CardinalZero.txt" />
+    <Content Include="RiceLakeZero.txt" />
     <Content Include="SoftScaleHead.ico" />
-    <Content Include="zerocommands.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
