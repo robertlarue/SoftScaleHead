@@ -1,6 +1,6 @@
 # SoftScaleHead
 Remote scale head with zeroing capability for industrial weigh scales (Rice Lake, Cardinal)
-![SoftScaleHead Screenshot](/solarized-palette.png?raw=true)
+![SoftScaleHead Screenshot](/SoftScaleHead.png?raw=true)
 
 ##Download
 The latest version can be downloaded at the [Github Releases](https://github.com/robertlarue/SoftScaleHead/releases) page.
