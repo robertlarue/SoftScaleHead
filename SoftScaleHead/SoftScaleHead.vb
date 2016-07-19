@@ -437,21 +437,6 @@ Public Class SoftScaleHead
         If Not ZeroButtonTimeout.Enabled Then
             ZeroButtonTimeout.Start()
             ZeroScale(ZeroCommandFile)
-            'If ScaleStream IsNot Nothing Then
-            '    ZeroScale(ZeroCommandFile)
-            'Else
-            '    ConnectionTimer.Stop()
-            '    Try
-            '        ScaleOnline = My.Computer.Network.Ping(ScaleIPAddress, 1000)
-            '    Catch
-            '        ScaleOnline = False
-            '    End Try
-            '    If ScaleOnline Then
-            '        ZeroScale(ZeroCommandFile)
-            '    Else
-            '        ConnectionTimer.Start()
-            '    End If
-            'End If
         End If
     End Sub
 
@@ -495,60 +480,6 @@ Public Class SoftScaleHead
             ConnectionTimer.Stop()
         End If
     End Sub
-
-    'Private Sub GreenColorMenu_Click(sender As Object, e As EventArgs)
-    '    ScaleWeight.ForeColor = Color.Chartreuse
-    '    ScaleWeight.BackColor = Color.Black
-    '    Panel1.BackColor = Color.Black
-    '    UncheckOtherColors(GreenColorMenu)
-    '    SaveColorSettings()
-    'End Sub
-
-    'Private Sub RedColorMenu_Click(sender As Object, e As EventArgs)
-    '    ScaleWeight.ForeColor = Color.Red
-    '    ScaleWeight.BackColor = Color.Black
-    '    Panel1.BackColor = Color.Black
-    '    UncheckOtherColors(RedColorMenu)
-    '    SaveColorSettings()
-    'End Sub
-
-    'Private Sub TealColorMenu_Click(sender As Object, e As EventArgs)
-    '    ScaleWeight.ForeColor = Color.Cyan
-    '    ScaleWeight.BackColor = Color.Black
-    '    Panel1.BackColor = Color.Black
-    '    UncheckOtherColors(TealColorMenu)
-    '    SaveColorSettings()
-    'End Sub
-    'Private Sub WhiteBlackToolStripMenuItem_Click(sender As Object, e As EventArgs)
-    '    ScaleWeight.ForeColor = Color.White
-    '    ScaleWeight.BackColor = Color.Black
-    '    Panel1.BackColor = Color.Black
-    '    UncheckOtherColors(WhiteBlackToolStripMenuItem)
-    '    SaveColorSettings()
-    'End Sub
-    'Private Sub BlackWhiteToolStripMenuItem_Click(sender As Object, e As EventArgs)
-    '    ScaleWeight.ForeColor = Color.Black
-    '    ScaleWeight.BackColor = SystemColors.Menu
-    '    Panel1.BackColor = SystemColors.Menu
-    '    UncheckOtherColors(BlackWhiteToolStripMenuItem)
-    '    SaveColorSettings()
-    'End Sub
-
-    'Private Sub RedWhiteToolStripMenuItem_Click(sender As Object, e As EventArgs)
-    '    ScaleWeight.ForeColor = Color.Red
-    '    ScaleWeight.BackColor = SystemColors.Menu
-    '    Panel1.BackColor = SystemColors.Menu
-    '    UncheckOtherColors(RedWhiteToolStripMenuItem)
-    '    SaveColorSettings()
-    'End Sub
-
-    'Private Sub BlueWhiteToolStripMenuItem_Click(sender As Object, e As EventArgs)
-    '    ScaleWeight.ForeColor = Color.Blue
-    '    ScaleWeight.BackColor = SystemColors.Menu
-    '    Panel1.BackColor = SystemColors.Menu
-    '    UncheckOtherColors(BlueWhiteToolStripMenuItem)
-    '    SaveColorSettings()
-    'End Sub
 
     Private Sub UncheckOtherColors(MenuItem As ToolStripMenuItem)
         If MenuItem.Checked Then
