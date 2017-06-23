@@ -2,10 +2,10 @@
 Remote scale head with zeroing capability for industrial weigh scales (Rice Lake, Cardinal)
 ![SoftScaleHead Screenshot](/SoftScaleHead.png?raw=true)
 
-##Download
+## Download
 The latest version can be downloaded at the [Github Releases](https://github.com/robertlarue/SoftScaleHead/releases) page.
 
-##Usage
+## Usage
 The application is intended to be launched through customized shortcuts.
 Right-click on SoftScaleHead.exe and create a shortcut. Edit the properties of the shortcut so that the Target includes the setup parameters.
 
@@ -19,16 +19,16 @@ Right-click on SoftScaleHead.exe and create a shortcut. Edit the properties of t
 	/w    [Optional] Width of the window in pixels on first startup, subsequent startups will use the saved width
 	/h    [Optional] Width of the window in pixels on first startup, subsequent startups will use the saved width
 
-##Example
+## Example
 Connect to a scale called "Main Scale" with an Ethernet adapter at 192.168.1.101 on port 4001, and enable zeroing the scale.
 
     SoftScaleHead /a 192.168.1.101 /p 4001 /z CardinalZero.txt /d "Main Scale"
 
 Type the above line into the Target field of the shortcut properties.
 
-##GUI
+## GUI
 Right-Click the scale display window to open the GUI menu. From here, you can enable zeroing and change the scale colors.
 When choosing a zero command file, choose between the two that are included: RiceLakeZero.txt or CardinalZero.txt.
 
-##Config File
+## Config File
 All scale settings including IP Address, Port, Position, and Color will be saved in SoftScaleHead.exe.config
